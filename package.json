@@ -1,0 +1,19 @@
+{
+  "name": "aakis-developer-journey-firebase",
+  "version": "8.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "serve . -l 5500",
+    "firebase:login": "firebase login",
+    "firebase:deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
+    "setup:users": "node scripts/bootstrap-firebase-users.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "13.6.1"
+  },
+  "devDependencies": {
+    "firebase-tools": "15.22.4",
+    "serve": "14.2.5"
+  }
+}

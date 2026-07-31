@@ -1,0 +1,158 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return signedIn() && profile().role == "ADMIN";
+    }
+
+    function isCandidate() {
+      return signedIn() && profile().role == "CANDIDATE";
+    }
+
+    function sameWorkspace(workspaceId) {
+      return signedIn() && profile().workspaceId == workspaceId;
+    }
+
+    function ownsAdminWorkspace(adminId) {
+      return isAdmin() && request.auth.uid == adminId && profile().workspaceId == adminId;
+    }
+
+    function candidateOwns(candidateId) {
+      return isCandidate() && request.auth.uid == candidateId;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (
+                    request.auth.uid == userId
+                    || sameWorkspace(resource.data.workspaceId)
+                  );
+      allow create: if isAdmin()
+                    && request.auth.uid == request.resource.data.workspaceId
+                    && request.resource.data.role in ["ADMIN", "CANDIDATE"];
+      allow update: if isAdmin()
+                    && request.auth.uid == resource.data.workspaceId
+                    && request.resource.data.workspaceId == resource.data.workspaceId
+                    && request.resource.data.role == resource.data.role;
+      allow delete: if false;
+    }
+
+    match /workspaces/{adminId} {
+      allow read: if signedIn() && sameWorkspace(adminId);
+      allow create, update: if ownsAdminWorkspace(adminId)
+                            && request.resource.data.adminId == adminId
+                            && request.resource.data.workspaceId == adminId;
+      allow delete: if ownsAdminWorkspace(adminId);
+    }
+
+    match /assessmentsPrivate/{assessmentId} {
+      allow read: if isAdmin() && resource.data.adminId == request.auth.uid;
+      allow create, update: if isAdmin()
+                            && request.resource.data.adminId == request.auth.uid
+                            && request.resource.data.workspaceId == request.auth.uid;
+      allow delete: if isAdmin() && resource.data.adminId == request.auth.uid;
+    }
+
+    match /assessmentCatalog/{assessmentId} {
+      allow read: if signedIn()
+                  && (resource.data.adminId == request.auth.uid
+                      || resource.data.candidateId == request.auth.uid);
+      allow create, update: if isAdmin()
+                            && request.resource.data.adminId == request.auth.uid
+                            && request.resource.data.workspaceId == request.auth.uid;
+      allow delete: if isAdmin() && resource.data.adminId == request.auth.uid;
+    }
+
+    match /assessmentContent/{assessmentId} {
+      allow read: if signedIn()
+                  && (
+                    resource.data.adminId == request.auth.uid
+                    || (
+                      resource.data.candidateId == request.auth.uid
+                      && (resource.data.opensAtTs == null || request.time >= resource.data.opensAtTs)
+                    )
+                  );
+      allow create, update: if isAdmin()
+                            && request.resource.data.adminId == request.auth.uid
+                            && request.resource.data.workspaceId == request.auth.uid;
+      allow delete: if isAdmin() && resource.data.adminId == request.auth.uid;
+    }
+
+    match /attempts/{attemptId} {
+      allow read: if signedIn()
+                  && (resource.data.adminId == request.auth.uid
+                      || resource.data.candidateId == request.auth.uid);
+
+      allow create: if isCandidate()
+                    && request.resource.data.candidateId == request.auth.uid
+                    && request.resource.data.workspaceId == profile().workspaceId
+                    && request.resource.data.adminId == profile().workspaceId
+                    && request.resource.data.status == "IN_PROGRESS"
+                    && request.resource.data.keys().hasOnly([
+                      "id", "testId", "userId", "status", "startedAt", "submittedAt",
+                      "expiresAt", "remainingSeconds", "lastSavedAt", "integrityAcknowledgedAt",
+                      "integrityEvents", "tabSwitchCount", "responses", "adminId", "candidateId",
+                      "workspaceId", "startedAtTs", "expiresAtTs", "submittedAtTs", "updatedAt",
+                      "updatedAtTs"
+                    ])
+                    && exists(/databases/$(database)/documents/assessmentContent/$(request.resource.data.testId))
+                    && get(/databases/$(database)/documents/assessmentContent/$(request.resource.data.testId)).data.candidateId == request.auth.uid
+                    && (
+                      get(/databases/$(database)/documents/assessmentContent/$(request.resource.data.testId)).data.opensAtTs == null
+                      || request.time >= get(/databases/$(database)/documents/assessmentContent/$(request.resource.data.testId)).data.opensAtTs
+                    );
+
+      allow update: if (
+                      isAdmin()
+                      && resource.data.adminId == request.auth.uid
+                      && request.resource.data.adminId == resource.data.adminId
+                      && request.resource.data.candidateId == resource.data.candidateId
+                      && request.resource.data.testId == resource.data.testId
+                    ) || (
+                      isCandidate()
+                      && resource.data.candidateId == request.auth.uid
+                      && request.resource.data.candidateId == resource.data.candidateId
+                      && request.resource.data.adminId == resource.data.adminId
+                      && request.resource.data.testId == resource.data.testId
+                      && resource.data.status == "IN_PROGRESS"
+                      && request.resource.data.status in ["IN_PROGRESS", "SUBMITTED"]
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                        "status", "submittedAt", "submittedAtTs", "remainingSeconds", "lastSavedAt",
+                        "responses", "integrityEvents", "tabSwitchCount", "updatedAt", "updatedAtTs"
+                      ])
+                    );
+
+      allow delete: if isAdmin() && resource.data.adminId == request.auth.uid;
+    }
+
+    match /reviews/{attemptId} {
+      allow read: if isAdmin() && resource.data.adminId == request.auth.uid;
+      allow create, update: if isAdmin()
+                            && request.resource.data.adminId == request.auth.uid
+                            && request.resource.data.workspaceId == request.auth.uid;
+      allow delete: if isAdmin() && resource.data.adminId == request.auth.uid;
+    }
+
+    match /publishedResults/{attemptId} {
+      allow read: if signedIn()
+                  && (resource.data.adminId == request.auth.uid
+                      || resource.data.candidateId == request.auth.uid);
+      allow create, update: if isAdmin()
+                            && request.resource.data.adminId == request.auth.uid
+                            && request.resource.data.workspaceId == request.auth.uid;
+      allow delete: if isAdmin() && resource.data.adminId == request.auth.uid;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
