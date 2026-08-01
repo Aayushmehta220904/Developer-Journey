@@ -2542,7 +2542,10 @@ ${userScript}
           <div class="editor-panel">
             <div class="panel-bar">
               <span>Web project editor</span>
-              <button class="btn btn-ghost btn-sm" onclick="AakiJourney.resetCode('${question.id}')">Reset starter</button>
+              <div class="panel-actions">
+                <button class="btn btn-secondary btn-sm" onclick="AakiJourney.openCodeEditorOverlay('${attemptId}','${question.id}')">Focus editor</button>
+                <button class="btn btn-ghost btn-sm editor-reset-btn" onclick="AakiJourney.resetCode('${question.id}')">Reset starter</button>
+              </div>
             </div>
             <div class="code-file-tabs" role="tablist" aria-label="Project files">
               ${WEB_FILE_KEYS.map((key) => `<button type="button" class="code-file-tab ${activeFile === key ? "active" : ""}" data-code-tab="${key}" onclick="AakiJourney.setWebFileTab('${question.id}','${key}')">${key === "html" ? "HTML" : key === "css" ? "CSS" : "JavaScript"}</button>`).join("")}
@@ -2567,7 +2570,7 @@ ${userScript}
     return `
       <div class="code-workspace">
         <div class="editor-panel">
-          <div class="panel-bar"><span>${escapeHtml(question.language || "Code")} editor</span><button class="btn btn-ghost btn-sm" onclick="AakiJourney.resetCode('${question.id}')">Reset starter</button></div>
+          <div class="panel-bar"><span>${escapeHtml(question.language || "Code")} editor</span><div class="panel-actions"><button class="btn btn-secondary btn-sm" onclick="AakiJourney.openCodeEditorOverlay('${attemptId}','${question.id}')">Focus editor</button><button class="btn btn-ghost btn-sm editor-reset-btn" onclick="AakiJourney.resetCode('${question.id}')">Reset starter</button></div></div>
           <textarea id="code-editor" data-cm-context="candidate" data-question-id="${escapeAttr(question.id)}" data-language="${escapeAttr(question.language || "Other")}" class="code-editor" spellcheck="false">${escapeHtml(response.code || "")}</textarea>
         </div>
         <div class="preview-panel test-case-panel">
@@ -2906,6 +2909,91 @@ ${userScript}
       saveData();
       closeModal();
       render();
+    });
+  }
+
+  function setFocusCodeFileTab(questionId, fileKey) {
+    if (!WEB_FILE_KEYS.includes(fileKey)) return;
+    activeWebFileByQuestion[questionId] = fileKey;
+    modalRoot.querySelectorAll("[data-focus-code-tab]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.focusCodeTab === fileKey);
+    });
+    modalRoot.querySelectorAll("[data-focus-code-file]").forEach((textarea) => {
+      const active = textarea.dataset.focusCodeFile === fileKey;
+      const instance = codeMirrorInstances.get(textarea);
+      const wrapper = instance?.getWrapperElement();
+      if (wrapper) {
+        wrapper.classList.toggle("is-hidden", !active);
+        if (active) {
+          requestAnimationFrame(() => {
+            instance.refresh();
+            instance.focus();
+          });
+        }
+      } else {
+        textarea.classList.toggle("is-hidden", !active);
+      }
+    });
+  }
+
+  function openCodeEditorOverlay(attemptId, questionId) {
+    if (!requireCandidate()) return;
+    const attempt = data.attempts.find((item) => item.id === attemptId);
+    const test = getTest(attempt?.testId);
+    const question = test?.questions.find((item) => item.id === questionId);
+    if (!attempt || !question || attempt.userId !== currentUser.id || attempt.status !== "IN_PROGRESS" || question.type !== "CODE") return;
+
+    const response = attempt.responses?.[question.id] || {};
+    const webPreview = isWebPreviewQuestion(question);
+    const activeFile = activeWebFileByQuestion[question.id]
+      || (String(question.language || "").toUpperCase() === "CSS" ? "css" : String(question.language || "").toUpperCase() === "JAVASCRIPT" ? "javascript" : "html");
+    const files = webPreview ? getResponseFiles(question, response) : null;
+
+    modalRoot.innerHTML = `
+      <section class="code-focus-overlay" role="dialog" aria-modal="true" aria-label="Focused code editor">
+        <header class="code-focus-bar">
+          <div class="code-focus-heading">
+            <strong>${escapeHtml(question.prompt || `${question.language || "Code"} editor`)}</strong>
+            <span>${webPreview ? "HTML · CSS · JavaScript" : escapeHtml(question.language || "Source code")} · Changes autosave to this assessment</span>
+          </div>
+          <div class="code-focus-actions">
+            <span class="badge badge-green">Autosave active</span>
+            <button class="btn btn-primary" onclick="AakiJourney.closeModal()">Return to assessment</button>
+          </div>
+        </header>
+        ${webPreview ? `
+          <div class="code-focus-tabs" role="tablist" aria-label="Focused project files">
+            ${WEB_FILE_KEYS.map((key) => `<button type="button" class="code-file-tab ${activeFile === key ? "active" : ""}" data-focus-code-tab="${key}" onclick="AakiJourney.setFocusCodeFileTab('${question.id}','${key}')">${key === "html" ? "HTML" : key === "css" ? "CSS" : "JavaScript"}</button>`).join("")}
+          </div>
+          <div class="code-focus-editor-stage">
+            ${WEB_FILE_KEYS.map((key) => `<textarea data-cm-context="focus" data-focus-code-file="${key}" data-question-id="${escapeAttr(question.id)}" data-file-key="${key}" data-language="${key}" class="code-focus-textarea" spellcheck="false">${escapeHtml(files[key] || "")}</textarea>`).join("")}
+          </div>
+        ` : `
+          <div class="code-focus-editor-stage code-focus-editor-stage-single">
+            <textarea data-cm-context="focus" data-question-id="${escapeAttr(question.id)}" data-language="${escapeAttr(question.language || "Other")}" class="code-focus-textarea" spellcheck="false">${escapeHtml(response.code || "")}</textarea>
+          </div>
+        `}
+      </section>
+    `;
+
+    requestAnimationFrame(() => {
+      modalRoot.querySelectorAll('textarea[data-cm-context="focus"]').forEach((textarea) => {
+        const fileKey = textarea.dataset.fileKey || null;
+        createCodeEditor(textarea, {
+          language: textarea.dataset.language || question.language,
+          height: "100%",
+          onChange: (value) => updateCode(question.id, value, fileKey)
+        });
+      });
+      if (webPreview) setFocusCodeFileTab(question.id, activeFile);
+      else {
+        const textarea = modalRoot.querySelector('textarea[data-cm-context="focus"]');
+        const editor = textarea ? codeMirrorInstances.get(textarea) : null;
+        requestAnimationFrame(() => {
+          editor?.refresh();
+          editor?.focus();
+        });
+      }
     });
   }
 
@@ -4314,6 +4402,8 @@ ${userScript}
     confirmMcq,
     updateCode,
     setWebFileTab,
+    setFocusCodeFileTab,
+    openCodeEditorOverlay,
     openPreviewOverlay,
     resetCode,
     requestSubmit,

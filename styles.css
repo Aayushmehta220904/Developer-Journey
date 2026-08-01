@@ -2654,7 +2654,7 @@ body::before {
   }
 }
 
-/* Version 7 â€” Firebase journey branding, account profiles, and shared palettes */
+/* Version 7 — Firebase journey branding, account profiles, and shared palettes */
 :root,
 :root[data-palette="aurora"] {
   --bg: #f7f5ff;
@@ -3351,7 +3351,7 @@ body {
   }
 }
 
-/* Version 7 â€” Firebase collaboration, image-path branding, and brighter interaction */
+/* Version 7 — Firebase collaboration, image-path branding, and brighter interaction */
 :root[data-palette="candy"] {
   --bg: #fff6fd;
   --surface: #ffffff;
@@ -3538,7 +3538,7 @@ body {
   }
 }
 
-/* Version 8 â€” account-specific appearance and reliable dark mode */
+/* Version 8 — account-specific appearance and reliable dark mode */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #0f0d18;
@@ -3842,5 +3842,163 @@ body {
 
   .code-file-tabs {
     overflow-x: auto;
+  }
+}
+
+
+/* Version 2.2 — focused code editor and visible editor controls */
+.editor-panel .panel-bar .panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.editor-panel .panel-bar .btn-ghost,
+.editor-panel .panel-bar .editor-reset-btn {
+  color: #f6f7ff !important;
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(238, 241, 255, 0.72);
+  text-shadow: none;
+}
+
+.editor-panel .panel-bar .btn-ghost:hover:not(:disabled),
+.editor-panel .panel-bar .editor-reset-btn:hover:not(:disabled) {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.95);
+}
+
+.editor-panel .panel-bar .btn-secondary {
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(109, 59, 242, 0.72), rgba(226, 70, 139, 0.58));
+  border-color: rgba(190, 167, 255, 0.58);
+}
+
+.code-focus-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2300;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  color: #f4f6ff;
+  background: #0d1019;
+}
+
+.code-focus-bar {
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(135deg, #1a1f30, #131725);
+}
+
+.code-focus-heading {
+  min-width: 0;
+}
+
+.code-focus-heading strong,
+.code-focus-heading span {
+  display: block;
+}
+
+.code-focus-heading strong {
+  overflow: hidden;
+  color: #ffffff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+}
+
+.code-focus-heading span {
+  margin-top: 4px;
+  color: #9da8bd;
+  font-size: 0.77rem;
+}
+
+.code-focus-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.code-focus-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #151925;
+}
+
+.code-focus-editor-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--code-bg);
+}
+
+.code-focus-editor-stage .CodeMirror {
+  width: 100%;
+  height: 100% !important;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  font-size: 0.98rem;
+  line-height: 1.72;
+}
+
+.code-focus-editor-stage .CodeMirror-scroll {
+  min-height: 100%;
+}
+
+.code-focus-textarea {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  resize: none;
+  border: 0;
+  color: var(--code-text);
+  background: var(--code-bg);
+}
+
+.code-focus-editor-stage .CodeMirror.is-hidden,
+.code-focus-textarea.is-hidden {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .code-focus-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 11px 13px;
+  }
+
+  .code-focus-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .code-focus-actions .badge {
+    display: none;
+  }
+
+  .code-focus-actions .btn {
+    width: 100%;
+  }
+
+  .code-focus-editor-stage .CodeMirror {
+    font-size: 0.86rem;
   }
 }
