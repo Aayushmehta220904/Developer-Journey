@@ -1739,7 +1739,7 @@ ${userScript}
           <div class="auth-copy">
             <span class="auth-kicker">A private coding journey</span>
             <h1>Practice boldly.<br>Review thoughtfully.<br>Grow visibly.</h1>
-            <p>Assessments, project previews, code execution, personal feedback, and progress—connected securely to each account ID.</p>
+            <p>Assessments, project previews, code execution, personal feedback, and progress connected securely to each account ID.</p>
             <div class="auth-feature-row"><span>Code challenges</span><span>Manual review</span><span>Progress stories</span></div>
           </div>
         </div>
@@ -1761,7 +1761,7 @@ ${userScript}
                 </div>
               </div>
               <button class="btn btn-primary btn-block" type="submit">Enter journey</button>
-              <div class="secure-signin"><span></span>Firebase ID-based access</div>
+              <div class="secure-signin"><span></span>Firebase ID based access</div>
             </form>
           ` : `
             <div class="auth-card cloud-setup-card">
@@ -1794,7 +1794,7 @@ ${userScript}
         </div>
         <div class="grid grid-4">
           <article class="card metric-card" style="--metric-soft:var(--primary-soft)"><span class="metric-label">Published tests</span><strong class="metric-value">${publishedTests.length}</strong><span class="metric-note">Ready or assigned to Aaki</span></article>
-          <article class="card metric-card" style="--metric-soft:var(--amber-soft)"><span class="metric-label">Waiting for review</span><strong class="metric-value">${pending.length}</strong><span class="metric-note">Submitted or draft-reviewed</span></article>
+          <article class="card metric-card" style="--metric-soft:var(--amber-soft)"><span class="metric-label">Waiting for review</span><strong class="metric-value">${pending.length}</strong><span class="metric-note">Submitted or draft reviewed</span></article>
           <article class="card metric-card" style="--metric-soft:var(--green-soft)"><span class="metric-label">Published results</span><strong class="metric-value">${publishedAttempts.length}</strong><span class="metric-note">Visible to Aaki</span></article>
           <article class="card metric-card" style="--metric-soft:var(--rose-soft)"><span class="metric-label">Average score</span><strong class="metric-value">${average}%</strong><span class="metric-note">Across published results</span></article>
         </div>
@@ -1917,7 +1917,7 @@ ${userScript}
     const tests = [...data.tests].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     renderLayout(`
       <div class="page">
-        <div class="page-head"><div><h1>Assessment library</h1><p>Create tests once, keep every question language-aware, and publish only when the assessment is ready.</p></div><div class="page-actions"><button class="btn btn-primary" onclick="AakiJourney.openTestBuilder()">Create assessment</button></div></div>
+        <div class="page-head"><div><h1>Assessment library</h1><p>Create tests once, keep every question language aware, and publish only when the assessment is ready.</p></div><div class="page-actions"><button class="btn btn-primary" onclick="AakiJourney.openTestBuilder()">Create assessment</button></div></div>
         ${tests.length ? `
           <div class="test-grid">
             ${tests.map((test) => {
@@ -2089,7 +2089,7 @@ ${userScript}
         </div>
 
         <section class="card section-card palette-studio" style="margin-top:20px">
-          <div class="section-head"><div><h3>Your colour palette</h3><p>This preference belongs only to the signed-in account on this device.</p></div><span class="badge badge-primary">${escapeHtml(currentPalette())}</span></div>
+          <div class="section-head"><div><h3>Your colour palette</h3><p>This preference belongs only to the signed in account on this device.</p></div><span class="badge badge-primary">${escapeHtml(currentPalette())}</span></div>
           <div class="palette-grid">
             ${[
               ["aurora", "Aurora Pop", "Violet, coral, cyan"],
@@ -3306,7 +3306,7 @@ ${userScript}
             <div class="builder-shell">
               <section class="card builder-section" style="box-shadow:none">
                 <div class="section-head"><div><h3>Assessment details</h3><p>Core configuration and candidate instructions</p></div></div>
-                <div class="field"><label>Test title</label><input value="${escapeAttr(builderDraft.title)}" oninput="AakiJourney.updateBuilderField('title',this.value)" placeholder="e.g. HTML Fundamentals — Level 2" /></div>
+                <div class="field"><label>Test title</label><input value="${escapeAttr(builderDraft.title)}" oninput="AakiJourney.updateBuilderField('title',this.value)" placeholder="e.g. HTML Fundamentals - Level 2" /></div>
                 <div class="field"><label>Description</label><textarea oninput="AakiJourney.updateBuilderField('description',this.value)" placeholder="Briefly explain what this assessment covers.">${escapeHtml(builderDraft.description)}</textarea></div>
                 <div class="field-row">
                   <div class="field"><label>Technology</label><select onchange="AakiJourney.updateBuilderField('technology',this.value)">${TECHNOLOGIES.map((item) => `<option ${builderDraft.technology === item ? "selected" : ""}>${item}</option>`).join("")}</select></div>
