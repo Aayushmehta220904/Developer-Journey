@@ -1917,7 +1917,7 @@ ${userScript}
     const tests = [...data.tests].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     renderLayout(`
       <div class="page">
-        <div class="page-head"><div><h1>Assessment library</h1><p>Create tests once, keep every question language aware, and publish only when the assessment is ready.</p></div><div class="page-actions"><button class="btn btn-primary" onclick="AakiJourney.openTestBuilder()">Create assessment</button></div></div>
+        <div class="page-head"><div><h1>Assessment library</h1><p>Create tests manually or import one assessment JSON file at a time. Existing assessments are never replaced by assessment imports.</p></div><div class="page-actions"><input id="assessment-json-import" type="file" accept="application/json,.json" hidden onchange="AakiJourney.importAssessmentJson(event)" /><button class="btn btn-ghost" onclick="AakiJourney.downloadAssessmentTemplate()">JSON template</button><button class="btn btn-secondary" onclick="document.getElementById('assessment-json-import').click()">Import assessment JSON</button><button class="btn btn-primary" onclick="AakiJourney.openTestBuilder()">Create assessment</button></div></div>
         ${tests.length ? `
           <div class="test-grid">
             ${tests.map((test) => {
@@ -2136,7 +2136,7 @@ ${userScript}
           <section class="card section-card" style="margin-top:20px"><div class="section-head"><div><h3>Workspace protection</h3><p>Private backup controls</p></div><span class="badge badge-green">Schema v${SCHEMA_VERSION}</span></div>
             <div class="list">
               <div class="list-row"><div class="list-main"><strong>Export complete backup</strong><span>Download tests, attempts, reviews, images, profiles, and branding.</span></div><button class="btn btn-secondary" onclick="AakiJourney.exportData()">Export JSON</button></div>
-              <div class="list-row"><div class="list-main"><strong>Import workspace backup</strong><span>Restore a previously exported workspace.</span></div><div><input id="workspace-import" type="file" accept="application/json,.json" hidden onchange="AakiJourney.importData(event)" /><button class="btn btn-ghost" onclick="document.getElementById('workspace-import').click()">Choose backup</button></div></div>
+              <div class="list-row"><div class="list-main"><strong>Restore entire workspace backup</strong><span>Replaces every assessment, attempt, review, and result. This is not used for importing a single assessment.</span></div><div><input id="workspace-import" type="file" accept="application/json,.json" hidden onchange="AakiJourney.importData(event)" /><button class="btn btn-danger" onclick="document.getElementById('workspace-import').click()">Choose workspace backup</button></div></div>
             </div>
           </section>
         ` : `
@@ -3800,6 +3800,266 @@ ${userScript}
     modalRoot.innerHTML = "";
   }
 
+  function normaliseImportedTechnology(value, fallback = "HTML") {
+    const text = String(value || fallback).trim();
+    const aliases = {
+      JS: "JavaScript",
+      JAVASCRIPT: "JavaScript",
+      PY: "Python",
+      CPP: "C++",
+      "C PLUS PLUS": "C++",
+      HTML5: "HTML",
+      CSS3: "CSS"
+    };
+    const alias = aliases[text.toUpperCase()];
+    if (alias) return alias;
+    return TECHNOLOGIES.find((item) => item.toLowerCase() === text.toLowerCase()) || "Other";
+  }
+
+  function normaliseImportedEvaluationMode(value, language, type) {
+    const mode = String(value || "").trim().toUpperCase().replaceAll("-", "_").replaceAll(" ", "_");
+    if (type === "WEB_PROJECT" || ["WEB_PREVIEW", "LIVE_PREVIEW", "WEB_PROJECT"].includes(mode)) return "WEB_PREVIEW";
+    if (["TEST_CASES", "TESTCASE", "TEST_CASE", "SOURCE_CODE_TEST_CASES"].includes(mode)) return "TEST_CASES";
+    if (["SOURCE_ONLY", "MANUAL", "MANUAL_REVIEW"].includes(mode)) return "SOURCE_ONLY";
+    return defaultEvaluationMode(language);
+  }
+
+  function normaliseAssessmentJson(parsed) {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("The assessment JSON must contain one JSON object.");
+    if (Array.isArray(parsed.tests) || Array.isArray(parsed.attempts) || Array.isArray(parsed.users)) {
+      throw new Error("This is a workspace backup. Use Restore entire workspace backup in Settings, not Import assessment JSON.");
+    }
+
+    const title = String(parsed.title || "").trim();
+    if (!title) throw new Error("Assessment title is required.");
+    const rawQuestions = Array.isArray(parsed.questions) ? parsed.questions : [];
+    if (!rawQuestions.length) throw new Error("Add at least one question to the assessment JSON.");
+
+    const questions = rawQuestions.map((rawQuestion, index) => {
+      if (!rawQuestion || typeof rawQuestion !== "object" || Array.isArray(rawQuestion)) {
+        throw new Error(`Question ${index + 1} must be a JSON object.`);
+      }
+      const rawType = String(rawQuestion.type || "").trim().toUpperCase().replaceAll("-", "_").replaceAll(" ", "_");
+      const isMcq = ["MCQ", "MULTIPLE_CHOICE", "MULTIPLE_CHOICE_QUESTION"].includes(rawType);
+      const isWebProject = ["WEB_PROJECT", "HTML_PROJECT", "WEB_PREVIEW"].includes(rawType);
+      const isCode = isWebProject || ["CODE", "CODING", "PROGRAMMING"].includes(rawType);
+      if (!isMcq && !isCode) throw new Error(`Question ${index + 1} has an unsupported type: ${rawQuestion.type || "missing"}.`);
+
+      const prompt = String(rawQuestion.question || rawQuestion.prompt || rawQuestion.title || "").trim();
+      if (!prompt) throw new Error(`Question ${index + 1} needs a question, prompt, or title.`);
+      const description = String(rawQuestion.description || rawQuestion.instructions || "").trim();
+      const imageData = String(rawQuestion.imagePath || rawQuestion.imageData || "").trim();
+      const imageAlt = String(rawQuestion.imageAlt || rawQuestion.imageDescription || "").trim();
+
+      if (isMcq) {
+        const rawOptions = Array.isArray(rawQuestion.options) ? rawQuestion.options : [];
+        if (rawOptions.length < 2) throw new Error(`MCQ ${index + 1} requires at least two options.`);
+        const options = rawOptions.map((option, optionIndex) => {
+          const text = String(typeof option === "string" ? option : option?.text ?? option?.label ?? "").trim();
+          if (!text) throw new Error(`MCQ ${index + 1}, option ${optionIndex + 1} is empty.`);
+          return { id: uid("opt"), text };
+        });
+        let correctIndex = Number(rawQuestion.correctOptionIndex);
+        if (!Number.isInteger(correctIndex)) {
+          const correctText = String(rawQuestion.correctAnswer || "").trim();
+          correctIndex = correctText ? options.findIndex((option) => option.text === correctText) : -1;
+        }
+        if (correctIndex < 0 || correctIndex >= options.length) {
+          throw new Error(`MCQ ${index + 1} has an invalid correctOptionIndex. Use a zero-based option index.`);
+        }
+        return {
+          id: uid("q"),
+          type: "MCQ",
+          prompt,
+          description,
+          explanation: String(rawQuestion.explanation || "").trim(),
+          imageData,
+          imageAlt,
+          marks: 1,
+          options,
+          correctOptionId: options[correctIndex].id
+        };
+      }
+
+      const marks = Number(rawQuestion.marks);
+      if (!Number.isFinite(marks) || marks < 5 || marks > 50) {
+        throw new Error(`Coding question ${index + 1} must carry between 5 and 50 marks.`);
+      }
+      const language = normaliseImportedTechnology(rawQuestion.language || parsed.subject || parsed.technology || (isWebProject ? "HTML" : "Other"));
+      const evaluationMode = normaliseImportedEvaluationMode(rawQuestion.workspaceMode || rawQuestion.evaluationMode, language, isWebProject ? "WEB_PROJECT" : "CODE");
+      const rawStarterFiles = rawQuestion.starterFiles || (typeof rawQuestion.starterCode === "object" ? rawQuestion.starterCode : {});
+      const starterFiles = {
+        html: String(rawStarterFiles?.html || (evaluationMode === "WEB_PREVIEW" && typeof rawQuestion.starterCode === "string" ? rawQuestion.starterCode : "")),
+        css: String(rawStarterFiles?.css || ""),
+        javascript: String(rawStarterFiles?.javascript || rawStarterFiles?.js || "")
+      };
+      const starterCode = evaluationMode === "WEB_PREVIEW" ? "" : String(typeof rawQuestion.starterCode === "string" ? rawQuestion.starterCode : "");
+      const rawCases = Array.isArray(rawQuestion.testCases) ? rawQuestion.testCases : [];
+      const testCases = rawCases.map((item, caseIndex) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error(`Question ${index + 1}, test case ${caseIndex + 1} must be a JSON object.`);
+        const visibilityText = String(item.visibility || "PUBLIC").trim().toUpperCase();
+        const visibility = ["PRIVATE", "HIDDEN"].includes(visibilityText) ? "HIDDEN" : "PUBLIC";
+        const expectedOutput = String(item.expectedOutput ?? item.output ?? "");
+        if (evaluationMode === "TEST_CASES" && !expectedOutput.trim()) {
+          throw new Error(`Question ${index + 1}, test case ${caseIndex + 1} requires expectedOutput.`);
+        }
+        return {
+          id: uid("case"),
+          visibility,
+          input: String(item.input ?? ""),
+          expectedOutput,
+          note: String(item.explanation || item.note || "")
+        };
+      });
+      if (evaluationMode === "TEST_CASES" && !testCases.length) {
+        throw new Error(`Coding question ${index + 1} uses TEST_CASES but contains no test cases.`);
+      }
+      return {
+        id: uid("q"),
+        type: "CODE",
+        prompt,
+        description,
+        imageData,
+        imageAlt,
+        marks: Math.round(marks),
+        language,
+        evaluationMode,
+        starterCode,
+        starterFiles,
+        testCases
+      };
+    });
+
+    const totalMarks = questions.reduce((sum, question) => sum + Number(question.marks || 0), 0);
+    let passPercentage = Number(parsed.passPercentage);
+    if (!Number.isFinite(passPercentage) && Number.isFinite(Number(parsed.passingMarks)) && totalMarks > 0) {
+      passPercentage = (Number(parsed.passingMarks) / totalMarks) * 100;
+    }
+    if (!Number.isFinite(passPercentage)) passPercentage = 50;
+
+    let opensAt = null;
+    if (parsed.opensAt) {
+      const date = new Date(parsed.opensAt);
+      if (Number.isNaN(date.getTime())) throw new Error("opensAt must be a valid ISO date and time.");
+      opensAt = date.toISOString();
+    }
+    const durationMinutes = Number(parsed.durationMinutes ?? 45);
+    if (!Number.isFinite(durationMinutes) || durationMinutes < 5 || durationMinutes > 300) {
+      throw new Error("durationMinutes must be between 5 and 300.");
+    }
+
+    return {
+      id: uid("test"),
+      title,
+      description: String(parsed.description || "Imported assessment").trim(),
+      technology: normaliseImportedTechnology(parsed.subject || parsed.technology || questions.find((question) => question.type === "CODE")?.language || "HTML"),
+      difficulty: DIFFICULTIES.find((item) => item.toLowerCase() === String(parsed.difficulty || "Beginner").toLowerCase()) || "Beginner",
+      durationMinutes: Math.round(durationMinutes),
+      passPercentage: clamp(Math.round(passPercentage), 0, 100),
+      opensAt,
+      instructions: Array.isArray(parsed.instructions) ? parsed.instructions.map((item) => String(item)).join("\n") : String(parsed.instructions || "MCQs allow one confirmed attempt. Coding answers are reviewed manually. Leaving the assessment tab is recorded. Results remain hidden until the complete review is published."),
+      status: "DRAFT",
+      assignedTo: data.users.filter((user) => user.role === "CANDIDATE").map((user) => user.id),
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      questions
+    };
+  }
+
+  async function importAssessmentJson(event) {
+    if (!requireAdmin()) return;
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const assessment = normaliseAssessmentJson(parsed);
+      requestConfirm(
+        "Import assessment as a new draft?",
+        `${assessment.title} contains ${assessment.questions.length} question${assessment.questions.length === 1 ? "" : "s"} and ${getTestTotal(assessment)} marks. It will be added as a new draft. Existing assessments, attempts, reviews, and results will not be changed.`,
+        () => {
+          data.tests.unshift(assessment);
+          addActivity("TEST", `${assessment.title} imported as a draft`);
+          saveData();
+          closeModal();
+          toast("Assessment imported", "The JSON assessment was added as a new draft. Existing data was preserved.");
+          render();
+        },
+        { confirmLabel: "Import as draft" }
+      );
+    } catch (error) {
+      console.error(error);
+      toast("Assessment import failed", error.message || "Choose a valid assessment JSON file.");
+    }
+  }
+
+  function downloadAssessmentTemplate() {
+    if (!requireAdmin()) return;
+    const template = {
+      title: "HTML Basics Test",
+      description: "Assessment covering fundamental HTML concepts.",
+      subject: "HTML",
+      difficulty: "Beginner",
+      durationMinutes: 60,
+      passingMarks: 12,
+      opensAt: "2026-08-05T18:00:00+05:30",
+      instructions: [
+        "Do not switch tabs during the assessment.",
+        "MCQ answers are locked after confirmation.",
+        "Submit the assessment before the timer expires."
+      ],
+      questions: [
+        {
+          id: "html-mcq-1",
+          type: "MCQ",
+          question: "Which tag creates the largest heading?",
+          marks: 1,
+          options: ["<heading>", "<h1>", "<head>", "<title>"],
+          correctOptionIndex: 1,
+          explanation: "The h1 element represents the highest-level heading.",
+          imagePath: ""
+        },
+        {
+          id: "html-code-1",
+          type: "WEB_PROJECT",
+          title: "Build a Registration Form",
+          description: "Create a semantic registration form.",
+          marks: 10,
+          language: "HTML",
+          workspaceMode: "WEB_PREVIEW",
+          imagePath: "",
+          starterCode: {
+            html: "<main>\n\n</main>",
+            css: "",
+            javascript: ""
+          }
+        },
+        {
+          id: "python-code-1",
+          type: "CODE",
+          title: "Add Two Numbers",
+          description: "Read two integers and print their sum.",
+          marks: 10,
+          language: "Python",
+          workspaceMode: "TEST_CASES",
+          starterCode: "a = int(input())\nb = int(input())\n",
+          testCases: [
+            { visibility: "PUBLIC", input: "2\n3", expectedOutput: "5", explanation: "Checks positive integers." },
+            { visibility: "PRIVATE", input: "-5\n10", expectedOutput: "5", explanation: "Checks negative input handling." }
+          ]
+        }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "assessment-template.json";
+    link.click();
+    URL.revokeObjectURL(url);
+    toast("Template downloaded", "Edit the JSON file, then import it from Assessment library.");
+  }
+
   function exportData() {
     if (!requireAdmin()) return;
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -3819,7 +4079,13 @@ ${userScript}
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text());
+      if (Array.isArray(parsed?.questions) && !Array.isArray(parsed?.tests)) {
+        throw new Error("This is an assessment JSON. Import it from Assessment library using Import assessment JSON.");
+      }
       const imported = migrateData(parsed, false);
+      if (!imported.tests.length && !imported.attempts.length) {
+        throw new Error("This backup contains no assessments or attempts, so it was not restored.");
+      }
       const importedAdmin = imported.users.find((user) => user.role === "ADMIN");
       const importedCandidate = imported.users.find((user) => user.role === "CANDIDATE");
       if (!importedAdmin || !importedCandidate) throw new Error("Both administrator and candidate accounts are required.");
@@ -3829,12 +4095,11 @@ ${userScript}
         () => {
           data = imported;
           saveData();
-          currentUser = importedAdmin;
-          localStorage.setItem(SESSION_KEY, importedAdmin.id);
           closeModal();
           toast("Workspace restored", "Tests, attempts, integrity records, marks, and remarks were imported.");
           go("dashboard");
-        }
+        },
+        { danger: true, confirmLabel: "Replace entire workspace" }
       );
     } catch (error) {
       console.error(error);
@@ -3972,6 +4237,8 @@ ${userScript}
     closeModal,
     exportData,
     importData,
+    importAssessmentJson,
+    downloadAssessmentTemplate,
     refreshCloudData,
     updateAwardedMarks,
     runQuestionTests,
