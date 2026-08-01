@@ -106,6 +106,97 @@
   const app = document.getElementById("app");
   const modalRoot = document.getElementById("modal-root");
   const toastRoot = document.getElementById("toast-root");
+  const codeMirrorInstances = new Map();
+
+  function codeMirrorModeFor(language) {
+    const value = String(language || "").trim().toUpperCase();
+    if (value === "HTML") return "htmlmixed";
+    if (value === "CSS") return "css";
+    if (value === "JAVASCRIPT") return "javascript";
+    if (value === "REACT") return { name: "javascript", jsx: true };
+    if (value === "PYTHON") return "python";
+    if (value === "JAVA") return "text/x-java";
+    if (value === "C") return "text/x-csrc";
+    if (value === "C++") return "text/x-c++src";
+    if (value === "SQL") return "text/x-sql";
+    return null;
+  }
+
+  function destroyCodeEditors(scope = document) {
+    for (const [textarea, editor] of [...codeMirrorInstances.entries()]) {
+      if (scope !== document && textarea.isConnected && !scope.contains(textarea)) continue;
+      try { editor.toTextArea(); } catch (_) { /* The surrounding view may already be removed. */ }
+      codeMirrorInstances.delete(textarea);
+    }
+  }
+
+  function createCodeEditor(textarea, { language, height = "470px", onChange } = {}) {
+    if (!textarea || !window.CodeMirror || codeMirrorInstances.has(textarea)) return null;
+    const editor = window.CodeMirror.fromTextArea(textarea, {
+      mode: codeMirrorModeFor(language),
+      theme: "aaki",
+      lineNumbers: true,
+      lineWrapping: false,
+      indentUnit: 2,
+      tabSize: 2,
+      indentWithTabs: false,
+      smartIndent: true,
+      electricChars: true,
+      matchBrackets: true,
+      autoCloseBrackets: true,
+      styleActiveLine: true,
+      viewportMargin: 20,
+      extraKeys: {
+        Tab(instance) {
+          if (instance.somethingSelected()) instance.indentSelection("add");
+          else instance.replaceSelection("  ", "end", "+input");
+        },
+        "Shift-Tab"(instance) {
+          instance.indentSelection("subtract");
+        }
+      }
+    });
+    editor.setSize("100%", height);
+    editor.getWrapperElement().setAttribute("aria-label", `${language || "Code"} editor`);
+    editor.on("change", (instance) => {
+      textarea.value = instance.getValue();
+      if (typeof onChange === "function") onChange(instance.getValue());
+    });
+    codeMirrorInstances.set(textarea, editor);
+    return editor;
+  }
+
+  function initializeCandidateCodeEditors(question) {
+    if (!window.CodeMirror || !question) return;
+    document.querySelectorAll('textarea[data-cm-context="candidate"]').forEach((textarea) => {
+      const questionId = textarea.dataset.questionId;
+      const fileKey = textarea.dataset.fileKey || null;
+      createCodeEditor(textarea, {
+        language: textarea.dataset.language || question.language,
+        height: "clamp(440px, 58vh, 680px)",
+        onChange: (value) => updateCode(questionId, value, fileKey)
+      });
+    });
+    if (isWebPreviewQuestion(question)) {
+      setWebFileTab(question.id, activeWebFileByQuestion[question.id] || "html");
+    }
+  }
+
+  function initializeBuilderCodeEditors() {
+    if (!window.CodeMirror || !builderDraft) return;
+    modalRoot.querySelectorAll('textarea[data-cm-context="builder"]').forEach((textarea) => {
+      const questionId = textarea.dataset.questionId;
+      const fileKey = textarea.dataset.fileKey || null;
+      createCodeEditor(textarea, {
+        language: textarea.dataset.language,
+        height: fileKey ? "230px" : "300px",
+        onChange: (value) => {
+          if (fileKey) updateBuilderStarterFile(questionId, fileKey, value);
+          else updateBuilderQuestion(questionId, "starterCode", value);
+        }
+      });
+    });
+  }
 
   function uid(prefix = "id") {
     return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -2418,9 +2509,10 @@ ${userScript}
       </div>
     `;
 
-    if (isWebPreviewQuestion(question)) {
-      setTimeout(() => updatePreview(question.id), 0);
-    }
+    setTimeout(() => {
+      initializeCandidateCodeEditors(question);
+      if (isWebPreviewQuestion(question)) updatePreview(question.id);
+    }, 0);
     startTimer(attempt);
   }
 
@@ -2455,7 +2547,7 @@ ${userScript}
             <div class="code-file-tabs" role="tablist" aria-label="Project files">
               ${WEB_FILE_KEYS.map((key) => `<button type="button" class="code-file-tab ${activeFile === key ? "active" : ""}" data-code-tab="${key}" onclick="AakiJourney.setWebFileTab('${question.id}','${key}')">${key === "html" ? "HTML" : key === "css" ? "CSS" : "JavaScript"}</button>`).join("")}
             </div>
-            ${WEB_FILE_KEYS.map((key) => `<textarea id="code-editor-${key}" data-code-file="${key}" class="code-editor code-editor-file ${activeFile === key ? "" : "is-hidden"}" spellcheck="false" oninput="AakiJourney.updateCode('${question.id}', this.value, '${key}')">${escapeHtml(files[key] || "")}</textarea>`).join("")}
+            ${WEB_FILE_KEYS.map((key) => `<textarea id="code-editor-${key}" data-cm-context="candidate" data-question-id="${escapeAttr(question.id)}" data-file-key="${key}" data-language="${key}" data-code-file="${key}" class="code-editor code-editor-file" spellcheck="false">${escapeHtml(files[key] || "")}</textarea>`).join("")}
           </div>
           <div class="preview-panel">
             <div class="panel-bar">
@@ -2476,7 +2568,7 @@ ${userScript}
       <div class="code-workspace">
         <div class="editor-panel">
           <div class="panel-bar"><span>${escapeHtml(question.language || "Code")} editor</span><button class="btn btn-ghost btn-sm" onclick="AakiJourney.resetCode('${question.id}')">Reset starter</button></div>
-          <textarea id="code-editor" class="code-editor" spellcheck="false" oninput="AakiJourney.updateCode('${question.id}', this.value)">${escapeHtml(response.code || "")}</textarea>
+          <textarea id="code-editor" data-cm-context="candidate" data-question-id="${escapeAttr(question.id)}" data-language="${escapeAttr(question.language || "Other")}" class="code-editor" spellcheck="false">${escapeHtml(response.code || "")}</textarea>
         </div>
         <div class="preview-panel test-case-panel">
           <div class="panel-bar"><span>${isTestCaseQuestion(question) ? "Test cases" : "Submission notes"}</span><div class="panel-actions">${renderHiddenCaseBadge(question)}${isTestCaseQuestion(question) ? `<button id="run-tests-${question.id}" class="btn btn-primary btn-sm" onclick="AakiJourney.runQuestionTests('${attemptId}','${question.id}',false)">▶ Run public tests</button>` : ""}</div></div>
@@ -2773,10 +2865,23 @@ ${userScript}
     document.querySelectorAll("[data-code-tab]").forEach((button) => {
       button.classList.toggle("active", button.dataset.codeTab === fileKey);
     });
-    document.querySelectorAll("[data-code-file]").forEach((editor) => {
-      editor.classList.toggle("is-hidden", editor.dataset.codeFile !== fileKey);
+    document.querySelectorAll("[data-code-file]").forEach((textarea) => {
+      const active = textarea.dataset.codeFile === fileKey;
+      const instance = codeMirrorInstances.get(textarea);
+      const wrapper = instance?.getWrapperElement();
+      if (wrapper) {
+        wrapper.classList.toggle("is-hidden", !active);
+        if (active) {
+          requestAnimationFrame(() => {
+            instance.refresh();
+            instance.focus();
+          });
+        }
+      } else {
+        textarea.classList.toggle("is-hidden", !active);
+        if (active) textarea.focus();
+      }
     });
-    document.querySelector(`[data-code-file="${fileKey}"]`)?.focus();
   }
 
   function updatePreview(questionId, frameId = "preview-frame") {
@@ -3298,6 +3403,7 @@ ${userScript}
   function renderBuilderModal(isEditing = false) {
     if (!isAdmin()) return;
     if (!builderDraft) return;
+    destroyCodeEditors(modalRoot);
     modalRoot.innerHTML = `
       <div class="modal-backdrop" onclick="if(event.target===this) AakiJourney.closeModal()">
         <div class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="builder-title">
@@ -3330,6 +3436,7 @@ ${userScript}
         </div>
       </div>
     `;
+    requestAnimationFrame(() => initializeBuilderCodeEditors());
   }
 
   function renderBuilderQuestion(question, index) {
@@ -3384,14 +3491,14 @@ ${userScript}
       <div class="builder-file-grid">
         ${WEB_FILE_KEYS.map((key) => `<div class="field" style="margin:0">
           <label>${key === "html" ? "HTML" : key === "css" ? "CSS" : "JavaScript"} starter</label>
-          <textarea class="builder-code-editor" oninput="AakiJourney.updateBuilderStarterFile('${question.id}','${key}',this.value)" placeholder="${key === "html" ? "<main>...</main>" : key === "css" ? ".card { ... }" : "const app = ...;"}">${escapeHtml(files[key] || "")}</textarea>
+          <textarea class="builder-code-editor" data-cm-context="builder" data-question-id="${escapeAttr(question.id)}" data-file-key="${key}" data-language="${key}" placeholder="${key === "html" ? "<main>...</main>" : key === "css" ? ".card { ... }" : "const app = ...;"}">${escapeHtml(files[key] || "")}</textarea>
         </div>`).join("")}
       </div>
     </section>`;
   }
 
   function renderBuilderSourceCode(question) {
-    return `<div class="field" style="margin-bottom:0"><label>Starter code</label><textarea class="builder-code-editor" oninput="AakiJourney.updateBuilderQuestion('${question.id}','starterCode',this.value)" placeholder="Optional starter code">${escapeHtml(question.starterCode || "")}</textarea></div>`;
+    return `<div class="field" style="margin-bottom:0"><label>Starter code</label><textarea class="builder-code-editor" data-cm-context="builder" data-question-id="${escapeAttr(question.id)}" data-language="${escapeAttr(question.language || "Other")}" placeholder="Optional starter code">${escapeHtml(question.starterCode || "")}</textarea></div>`;
   }
 
   function renderBuilderTestCases(question) {
@@ -3777,6 +3884,7 @@ ${userScript}
   }
 
   function requestConfirm(title, message, callback, options = {}) {
+    destroyCodeEditors(modalRoot);
     pendingConfirm = callback;
     const confirmClass = options.danger ? "btn-danger" : "btn-primary";
     const confirmLabel = options.confirmLabel || "Confirm";
@@ -3796,6 +3904,7 @@ ${userScript}
   }
 
   function closeModal() {
+    destroyCodeEditors(modalRoot);
     pendingConfirm = null;
     modalRoot.innerHTML = "";
   }
@@ -4156,6 +4265,7 @@ ${userScript}
 
   function render() {
     clearTimer();
+    destroyCodeEditors(app);
     applyPalette();
 
     if (currentUser && !getUser(currentUser.id)) currentUser = null;

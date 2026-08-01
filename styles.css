@@ -2654,7 +2654,7 @@ body::before {
   }
 }
 
-/* Version 7 — Firebase journey branding, account profiles, and shared palettes */
+/* Version 7 â€” Firebase journey branding, account profiles, and shared palettes */
 :root,
 :root[data-palette="aurora"] {
   --bg: #f7f5ff;
@@ -3351,7 +3351,7 @@ body {
   }
 }
 
-/* Version 7 — Firebase collaboration, image-path branding, and brighter interaction */
+/* Version 7 â€” Firebase collaboration, image-path branding, and brighter interaction */
 :root[data-palette="candy"] {
   --bg: #fff6fd;
   --surface: #ffffff;
@@ -3538,7 +3538,7 @@ body {
   }
 }
 
-/* Version 8 — account-specific appearance and reliable dark mode */
+/* Version 8 â€” account-specific appearance and reliable dark mode */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #0f0d18;
@@ -3627,4 +3627,220 @@ body {
 .preview-frame,
 .preview-focus-frame {
   background: #fff;
+}
+
+/* Version 2 code editor upgrade */
+:root {
+  --code-bg: #11131d;
+  --code-bg-soft: #171a27;
+  --code-gutter: #0c0e16;
+  --code-text: #e8edf7;
+  --code-muted: #69748a;
+  --code-selection: rgba(124, 92, 255, 0.34);
+  --code-active-line: rgba(255, 255, 255, 0.045);
+  --code-keyword: #c792ea;
+  --code-atom: #ff9cac;
+  --code-number: #f7c873;
+  --code-def: #82d8ff;
+  --code-variable: #e8edf7;
+  --code-variable-2: #a6e3a1;
+  --code-variable-3: #f7a8d8;
+  --code-property: #82d8ff;
+  --code-operator: #89ddff;
+  --code-comment: #75819a;
+  --code-string: #b8e986;
+  --code-string-2: #f4a6c8;
+  --code-meta: #ff9cac;
+  --code-tag: #ff7f9f;
+  --code-attribute: #c7a7ff;
+  --code-qualifier: #f7c873;
+  --code-bracket: #d8deea;
+  --code-error: #ff5370;
+}
+
+.code-workspace {
+  grid-template-columns: minmax(0, 1.18fr) minmax(340px, 0.82fr);
+  align-items: stretch;
+}
+
+.editor-panel {
+  background: var(--code-bg);
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--border));
+  box-shadow: 0 18px 42px rgba(10, 12, 22, 0.16);
+}
+
+.editor-panel .panel-bar {
+  color: #f2f5fb;
+  background: linear-gradient(135deg, #1c2030, #171a27);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.code-file-tabs {
+  padding: 9px 12px;
+  background: #151824;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.code-file-tab {
+  color: #8f9ab0;
+}
+
+.code-file-tab:hover,
+.code-file-tab.active {
+  color: #fff;
+  border-color: rgba(160, 128, 255, 0.45);
+  background: linear-gradient(135deg, rgba(109, 59, 242, 0.32), rgba(226, 70, 139, 0.22));
+}
+
+.CodeMirror {
+  height: 470px;
+  color: var(--code-text);
+  background: var(--code-bg);
+  font-family: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Consolas, "Liberation Mono", monospace;
+  font-size: 0.92rem;
+  line-height: 1.68;
+  letter-spacing: 0.005em;
+}
+
+.CodeMirror-scroll {
+  min-height: inherit;
+  overscroll-behavior: contain;
+}
+
+.CodeMirror-lines {
+  padding: 15px 0 28px;
+}
+
+.CodeMirror pre.CodeMirror-line,
+.CodeMirror pre.CodeMirror-line-like {
+  padding: 0 20px;
+}
+
+.CodeMirror-gutters {
+  min-width: 52px;
+  background: var(--code-gutter);
+  border-right: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.CodeMirror-linenumber {
+  min-width: 30px;
+  padding: 0 11px 0 8px;
+  color: var(--code-muted);
+  text-align: right;
+  font-size: 0.78rem;
+}
+
+.CodeMirror-cursor {
+  border-left: 2px solid #f8f9ff;
+}
+
+.CodeMirror-selected,
+.CodeMirror-focused .CodeMirror-selected {
+  background: var(--code-selection) !important;
+}
+
+.CodeMirror-activeline-background {
+  background: var(--code-active-line);
+}
+
+.CodeMirror-matchingbracket {
+  color: #fff !important;
+  background: rgba(79, 214, 190, 0.2);
+  outline: 1px solid rgba(79, 214, 190, 0.56);
+  border-radius: 3px;
+}
+
+.CodeMirror-nonmatchingbracket {
+  color: var(--code-error) !important;
+  background: rgba(255, 83, 112, 0.14);
+}
+
+.cm-s-aaki .cm-keyword { color: var(--code-keyword); font-weight: 650; }
+.cm-s-aaki .cm-atom { color: var(--code-atom); }
+.cm-s-aaki .cm-number { color: var(--code-number); }
+.cm-s-aaki .cm-def { color: var(--code-def); }
+.cm-s-aaki .cm-variable { color: var(--code-variable); }
+.cm-s-aaki .cm-variable-2 { color: var(--code-variable-2); }
+.cm-s-aaki .cm-variable-3,
+.cm-s-aaki .cm-type { color: var(--code-variable-3); }
+.cm-s-aaki .cm-property { color: var(--code-property); }
+.cm-s-aaki .cm-operator { color: var(--code-operator); }
+.cm-s-aaki .cm-comment { color: var(--code-comment); font-style: italic; }
+.cm-s-aaki .cm-string { color: var(--code-string); }
+.cm-s-aaki .cm-string-2 { color: var(--code-string-2); }
+.cm-s-aaki .cm-meta,
+.cm-s-aaki .cm-qualifier { color: var(--code-meta); }
+.cm-s-aaki .cm-tag { color: var(--code-tag); }
+.cm-s-aaki .cm-attribute { color: var(--code-attribute); }
+.cm-s-aaki .cm-builtin { color: #58d4c7; }
+.cm-s-aaki .cm-bracket { color: var(--code-bracket); }
+.cm-s-aaki .cm-link { color: #78bfff; text-decoration: underline; }
+.cm-s-aaki .cm-error { color: var(--code-error); text-decoration: wavy underline; }
+
+.CodeMirror.is-hidden {
+  display: none;
+}
+
+.code-editor {
+  min-height: 470px;
+  color: var(--code-text);
+  background: var(--code-bg);
+  white-space: pre;
+  overflow: auto;
+}
+
+.builder-file-grid {
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+
+.builder-code-section .CodeMirror,
+.question-builder-card .CodeMirror {
+  height: 230px;
+  border: 1px solid rgba(124, 92, 255, 0.22);
+  border-radius: 12px;
+}
+
+.question-builder-card .field > .CodeMirror {
+  height: 300px;
+}
+
+.builder-code-section .field label,
+.question-builder-card .field label {
+  margin-bottom: 8px;
+}
+
+.builder-code-editor {
+  min-height: 230px;
+}
+
+@media (max-width: 1320px) {
+  .code-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-frame,
+  .test-case-panel {
+    min-height: 390px;
+  }
+}
+
+@media (max-width: 680px) {
+  .CodeMirror {
+    font-size: 0.84rem;
+    line-height: 1.62;
+  }
+
+  .CodeMirror pre.CodeMirror-line,
+  .CodeMirror pre.CodeMirror-line-like {
+    padding: 0 13px;
+  }
+
+  .CodeMirror-gutters {
+    min-width: 42px;
+  }
+
+  .code-file-tabs {
+    overflow-x: auto;
+  }
 }
