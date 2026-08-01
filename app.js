@@ -130,8 +130,66 @@
     }
   }
 
+  function isMarkupEditorLanguage(language) {
+    return ["HTML", "REACT", "XML"].includes(String(language || "").trim().toUpperCase());
+  }
+
+  function editorHintProvider(language) {
+    if (!window.CodeMirror?.hint) return null;
+    const value = String(language || "").trim().toUpperCase();
+    if (value === "HTML") return window.CodeMirror.hint.html || window.CodeMirror.hint.anyword;
+    if (value === "CSS") return window.CodeMirror.hint.css || window.CodeMirror.hint.anyword;
+    if (["JAVASCRIPT", "REACT"].includes(value)) return window.CodeMirror.hint.javascript || window.CodeMirror.hint.anyword;
+    if (value === "SQL") return window.CodeMirror.hint.sql || window.CodeMirror.hint.anyword;
+    return window.CodeMirror.hint.anyword || null;
+  }
+
+  function showEditorHints(editor, language, automatic = false) {
+    if (!editor || !window.CodeMirror?.showHint || editor.state?.completionActive) return;
+    const hint = editorHintProvider(language);
+    if (!hint) return;
+    const cursor = editor.getCursor();
+    const token = editor.getTokenAt(cursor);
+    if (automatic && !String(token?.string || "").trim() && String(language || "").toUpperCase() !== "HTML") return;
+    editor.showHint({
+      hint,
+      completeSingle: false,
+      alignWithWord: true,
+      closeCharacters: /[\s()\[\]{};>,]/,
+      extraKeys: { Enter: "pick", Tab: "pick", Esc: "close" }
+    });
+  }
+
+  function reindentEditor(editor) {
+    if (!editor) return;
+    editor.operation(() => {
+      const first = editor.firstLine();
+      const last = editor.lastLine();
+      for (let line = first; line <= last; line += 1) editor.indentLine(line, "smart");
+    });
+    toast("Code re-indented", "Indentation was cleaned using the selected language mode.");
+  }
+
+  function duplicateEditorLine(editor) {
+    if (!editor) return;
+    const from = editor.getCursor("from");
+    const to = editor.getCursor("to");
+    editor.operation(() => {
+      if (editor.somethingSelected()) {
+        const selected = editor.getRange(from, to);
+        editor.replaceRange(`${selected}\n${selected}`, from, to, "+duplicate");
+        editor.setSelection(from, { line: to.line + (to.line - from.line + 1), ch: to.ch });
+        return;
+      }
+      const text = editor.getLine(from.line);
+      editor.replaceRange(`\n${text}`, { line: from.line, ch: text.length }, null, "+duplicate");
+      editor.setCursor({ line: from.line + 1, ch: from.ch });
+    });
+  }
+
   function createCodeEditor(textarea, { language, height = "470px", onChange } = {}) {
     if (!textarea || !window.CodeMirror || codeMirrorInstances.has(textarea)) return null;
+    const markupLanguage = isMarkupEditorLanguage(language);
     const editor = window.CodeMirror.fromTextArea(textarea, {
       mode: codeMirrorModeFor(language),
       theme: "aaki",
@@ -143,21 +201,50 @@
       smartIndent: true,
       electricChars: true,
       matchBrackets: true,
+      matchTags: markupLanguage ? { bothTags: true } : false,
       autoCloseBrackets: true,
+      autoCloseTags: markupLanguage,
       styleActiveLine: true,
+      foldGutter: true,
+      gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
       viewportMargin: 20,
       extraKeys: {
         Tab(instance) {
-          if (instance.somethingSelected()) instance.indentSelection("add");
-          else instance.replaceSelection("  ", "end", "+input");
+          if (instance.state?.completionActive) {
+            instance.execCommand("autocomplete");
+          } else if (instance.somethingSelected()) {
+            instance.indentSelection("add");
+          } else {
+            instance.replaceSelection("  ", "end", "+input");
+          }
         },
         "Shift-Tab"(instance) {
           instance.indentSelection("subtract");
-        }
+        },
+        "Ctrl-Space"(instance) { showEditorHints(instance, language); },
+        "Cmd-Space"(instance) { showEditorHints(instance, language); },
+        "Ctrl-/"(instance) { instance.execCommand("toggleComment"); },
+        "Cmd-/"(instance) { instance.execCommand("toggleComment"); },
+        "Ctrl-Q"(instance) { instance.foldCode(instance.getCursor()); },
+        "Cmd-Alt-L"(instance) { reindentEditor(instance); },
+        "Shift-Ctrl-F"(instance) { reindentEditor(instance); },
+        "Shift-Cmd-F"(instance) { reindentEditor(instance); },
+        "Shift-Alt-Down"(instance) { duplicateEditorLine(instance); }
       }
     });
     editor.setSize("100%", height);
     editor.getWrapperElement().setAttribute("aria-label", `${language || "Code"} editor`);
+    editor.getWrapperElement().dataset.editorLanguage = String(language || "Other");
+
+    let hintTimer = null;
+    editor.on("inputRead", (instance, change) => {
+      if (change.origin !== "+input" || instance.state?.completionActive) return;
+      const inserted = String((change.text || []).join(""));
+      if (!/[A-Za-z0-9_<.#:$-]$/.test(inserted)) return;
+      clearTimeout(hintTimer);
+      hintTimer = window.setTimeout(() => showEditorHints(instance, language, true), 160);
+    });
+
     editor.on("change", (instance) => {
       textarea.value = instance.getValue();
       if (typeof onChange === "function") onChange(instance.getValue());
@@ -2563,7 +2650,7 @@ ${userScript}
             <iframe id="preview-frame" class="preview-frame" title="Live web project preview" sandbox="allow-scripts allow-forms allow-modals"></iframe>
           </div>
         </div>
-        <div class="lock-note">HTML, CSS, and JavaScript are autosaved as separate project files. The focused preview stays inside this website and this test tab.</div>
+        <div class="lock-note">HTML, CSS, and JavaScript are autosaved as separate project files. HTML tags close automatically. Use Ctrl/⌘ + Space for suggestions, Ctrl/⌘ + / for comments, and Ctrl + Q to fold code.</div>
       `;
     }
 
@@ -2578,7 +2665,7 @@ ${userScript}
           ${isTestCaseQuestion(question) ? renderCandidateTestCases(question, response) : `<div class="test-case-empty"><strong>Manual review question</strong><span>Write and submit the source code. No automated test cases are configured.</span></div>`}
         </div>
       </div>
-      <div class="lock-note">Your source code is autosaved. Public tests can be run before submission; private tests remain hidden for admin review.</div>
+      <div class="lock-note">Your source code is autosaved. Use Ctrl/⌘ + Space for suggestions, Ctrl/⌘ + / for comments, Shift + Alt + Down to duplicate a line, and Ctrl + Q to fold code.</div>
     `;
   }
 
@@ -2954,7 +3041,7 @@ ${userScript}
         <header class="code-focus-bar">
           <div class="code-focus-heading">
             <strong>${escapeHtml(question.prompt || `${question.language || "Code"} editor`)}</strong>
-            <span>${webPreview ? "HTML · CSS · JavaScript" : escapeHtml(question.language || "Source code")} · Changes autosave to this assessment</span>
+            <span>${webPreview ? "HTML · CSS · JavaScript" : escapeHtml(question.language || "Source code")} · Autosave · Ctrl/⌘ + Space suggestions · Ctrl/⌘ + / comments</span>
           </div>
           <div class="code-focus-actions">
             <span class="badge badge-green">Autosave active</span>
